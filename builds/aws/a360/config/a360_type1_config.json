@@ -1,0 +1,107 @@
+{
+  "bucket_name": "axle-a360-demo-{}",
+  "dps_bucket_name": "axle-a360-geha-{}-dps",
+  "aws_reg_rs": "us-east-2",
+  "aws_reg_dp": "us-east-1",
+  "aws_reg_mft": "us-east-1",
+  "secret_name": "mz-aetna-redshift",
+  "redshift_db": "a360_fp_demo",
+  "request_type": "1",
+  "s3_key_reject_path": "archive/outbound/rejects/",
+  "metric_report_path": "archive/outbound/metrics",
+  "s3_key_extracts_path": "archive/outbound/extracts/",
+  "mft_bucket": "axle-a360-geha-{}-dps",
+  "s3_key_mft_outbound": "outbound/",
+  "process_outbound_extracts": "extracts/process_outbound_extracts",
+  "outbound_extracts": "extracts/outbound_extracts",
+  "split_file_maxsize": "2 GB",
+  "ctl_file_path": "archive/outbound/{}/ctl_file",
+  "extract_metadata_tbl": "a360_extract_metadata",
+  "insert_query": "insert into {}.{} select path as FILE_NAME,start_time,end_time,line_count as FILE_COUNT,transfer_size as FILE_SIZE, '<batch_id>' as batch_id from stl_unload_log where path ilike '%{}%';",
+  "email_business_users_list": "DL-A360-Team@Data-Axle.com",
+  "ingestion_path": "incoming",
+  "s3_key_dp_config": "config/dp_config/",
+  "dp_config": {
+    "daily": {
+      "athena_tab_to_dp": "stg_customer_dpinput_dly",
+      "athena_tab_from_dp": "stg_customer_dpoutput_dly",
+      "outbound": "dps_outbound/A360DLRT/",
+      "dp_outbound": "outbound/GEHA2DP/",
+      "inbound": "dps_inbound/A360DEVDLS3/",
+      "dp_inbound": "inbound/GEHDEVDLS3/",
+      "delimiter": "|",
+      "file_format": "TEXTFILE",
+      "compression" : "None"
+        }
+    },
+  "list_config": {
+    "NETWISE": {
+      "key_prefix": "incoming",
+      "file_pattern": "DAX_NETWISE*",
+      "header": true,
+      "fullfile": false,
+      "stg_load_config": {
+        "task_name": "STG_NETWISE",
+        "glue_job": "STG_FCVRL_NETWISE",
+        "write_to_parquet": false,
+        "redshift_procedure": "",
+        "redshift_procedure_params": "BATCH_ID",
+        "table_name": "STG_NETWISE",
+        "schema_name": "A360_STG",
+        "glue_job_parameters": {
+          "WorkerType": "G.1X",
+          "NumberOfWorkers": 5,
+          "JobBookmark": true,
+          "ScriptFilename": "FCVRL.py",
+          "JobParameters": {
+            "input_file": "DAX_NETWISE*",
+            "additional-python-modules": "h3==3.7.6,smart-open==6.3.0,openpyxl==3.1.2",
+            "format_file": "dax_netwise.json"
+          }
+        },
+        "dependencies": []
+      },
+      "ods_load_config": {
+        "task_name": "ODS_NETWISE",
+        "redshift_procedure": "A360_ODS.PRC_ODS_NETWISE"
+      },
+      "reject_mailbox": {
+        "INFOGROUP_NETWISE": []
+      }
+    },
+    "MEDICARE": {
+      "key_prefix": "incoming",
+      "file_pattern": "DAX_MEDICARE*",
+      "header": true,
+      "fullfile": true,
+      "stg_load_config": {
+        "task_name": "STG_MEDICARE",
+        "glue_job": "STG_FCVRL_MEDICARE",
+        "write_to_parquet": false,
+        "redshift_procedure": "",
+        "redshift_procedure_params": "BATCH_ID",
+        "table_name": "STG_MEDICARE",
+        "schema_name": "A360_STG",
+        "glue_job_parameters": {
+          "WorkerType": "G.1X",
+          "NumberOfWorkers": 5,
+          "JobBookmark": true,
+          "ScriptFilename": "FCVRL.py",
+          "JobParameters": {
+            "input_file": "DAX_MEDICARE*,stg_medicare_crc_prev,stg_medicare_crc_pii_prev",
+            "additional-python-modules": "h3==3.7.6,smart-open==6.3.0,openpyxl==3.1.2",
+            "format_file": "dax_medicare.json"
+          }
+        },
+        "dependencies": []
+      },
+      "ods_load_config": {
+        "task_name": "ODS_MEDICARE",
+        "redshift_procedure": "A360_ODS.PRC_ODS_MEDICARE"
+      },
+      "reject_mailbox": {
+        "INFOGROUP_MEDICARE": []
+      }
+    }
+  }
+}
