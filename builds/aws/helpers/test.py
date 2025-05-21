@@ -1,0 +1,3 @@
+from s3.py import copy_cross_region_s3_datasync
+
+copy_cross_region_s3_datasync()
