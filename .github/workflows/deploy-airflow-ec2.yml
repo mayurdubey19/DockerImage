@@ -1,0 +1,103 @@
+name: Deploy Airflow on EC2
+
+on:
+  push:
+    branches:
+      - main  # or your deployment branch
+
+env:
+  ECR_REGISTRY: 082126963185.dkr.ecr.us-east-2.amazonaws.com
+  ECR_REPOSITORY: audience360
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for infra changes
+        id: infra
+        run: |
+          git fetch origin ${{ github.event.before }}
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '(^Dockerfile$|^requirements\.txt$|^docker-compose\.yml$)')
+          if [ -n "$CHANGED" ]; then
+            echo "infra_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "infra_changed=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Extract branch name
+        if: steps.infra.outputs.infra_changed == 'true'
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+
+      - name: Branch Name and Build Number
+        if: steps.infra.outputs.infra_changed == 'true'
+        run: echo ${{ steps.extract_branch.outputs.branch }}-0.1.${{ github.run_number }}
+
+      - name: Check out code
+        if: steps.infra.outputs.infra_changed == 'true'
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        if: steps.infra.outputs.infra_changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        if: steps.infra.outputs.infra_changed == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image to Amazon ECR
+        if: steps.infra.outputs.infra_changed == 'true'
+        id: build-image
+        env:
+            IMAGE_TAG: 0.1.${{ github.run_number }}
+            ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            DEFAULT_AWS_REGION: ${{ vars.DEFAULT_AWS_REGION }}
+            DEFAULT_AWS_BUCKET_NAME: ${{ vars.DEFAULT_AWS_BUCKET_NAME }}
+            DEFAULT_GCP_BUCKET_NAME: ${{ vars.DEFAULT_GCP_BUCKET_NAME }}
+            DB_USERNAME_POSTGRESQL: ${{ vars.DB_USERNAME_POSTGRESQL }}
+            DB_PASSWORD_POSTGRESQL: ${{ secrets.DB_PASSWORD_POSTGRESQL }}
+            DB_HOST_ARG: ${{ secrets.DB_HOST_ARG}}
+        run: |
+            docker build \
+            --build-arg ACCESS_KEY_ID_ARG=$AWS_ACCESS_KEY_ID \
+            --build-arg SECRET_ACCESS_KEY_ARG=$SECRET_ACCESS_KEY \
+            --build-arg DEFAULT_AWS_REGION_ARG=$DEFAULT_AWS_REGION \
+            --build-arg DEFAULT_AWS_BUCKET_NAME_ARG=$DEFAULT_AWS_BUCKET_NAME \
+            --build-arg DEFAULT_GCP_BUCKET_NAME_ARG=$DEFAULT_GCP_BUCKET_NAME \
+            --build-arg DB_USER_ARG=$DB_USERNAME_POSTGRESQL \
+            --build-arg DB_PASSWORD_ARG=$DB_PASSWORD_POSTGRESQL \
+            --build-arg DB_HOST_ARG=$DB_HOST_ARG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Stop and Restart Container
+        if: steps.infra.outputs.infra_changed == 'true'
+        id: restart
+        run: |
+          # The following lines are equivalent to stopping and removing only the airflow container:
+          # docker ps --filter "name=airflow" --format "{{.Names}}" | while read cname; do
+          #   docker stop "$cname"
+          #   docker rm "$cname"
+          # done
+          docker-compose down
+          docker-compose -f docker-compose.yml up -d
+      
+      - name: Touch DAGs to trigger reload (if only code changed)
+        if: steps.infra.outputs.infra_changed == 'false'
+        run: |
+          docker ps --filter "name=airflow" --format "{{.Names}}" | while read cname; do
+            docker exec "$cname" bash -c "find /opt/airflow/dags/builds/aws -name '*.py' -exec touch {} +"
+          done
+
+      - name: Show running containers
+        run: docker ps
