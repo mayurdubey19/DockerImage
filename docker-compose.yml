@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   airflow:
-    image: airflow:12
+    image: <ECR_URI>:<tag>
     build:
       context: .
       dockerfile: Dockerfile
