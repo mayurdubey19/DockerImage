@@ -36,10 +36,6 @@ jobs:
         if: steps.infra.outputs.infra_changed == 'true'
         run: echo ${{ steps.extract_branch.outputs.branch }}-0.1.${{ github.run_number }}
 
-      - name: Check out code
-        if: steps.infra.outputs.infra_changed == 'true'
-        uses: actions/checkout@v2
-
       - name: Configure AWS credentials
         if: steps.infra.outputs.infra_changed == 'true'
         uses: aws-actions/configure-aws-credentials@v1
