@@ -34,6 +34,10 @@ else
   echo "Admin user already exists. Skipping creation."
 fi
 
+# Airflow expects DAGs to be in /opt/airflow/dags (synced via git-sync - This is used with ECS Fargate)
+echo "Waiting for DAGs to be synced by git-sync..."
+sleep 10  # small buffer to allow git-sync to finish initial pull
+
 # Start Airflow services
 airflow scheduler &   # background
 exec airflow webserver -p 8080 # foreground
